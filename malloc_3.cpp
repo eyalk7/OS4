@@ -207,6 +207,9 @@ void* scalloc(size_t num, size_t size) {
     // use smalloc with num * size
     void* alloc = smalloc(num * size);
 
+    // if mmaped no need to nullify
+    if (((MallocMetadata*)((char*)alloc - _size_meta_data()))->is_mmap) return alloc;
+
     // nullify with memset
     memset(alloc, 0, num * size);
 
@@ -288,7 +291,7 @@ size_t _num_allocated_bytes() {
 }
 
 size_t _num_meta_data_bytes() {
-    return allocated_blocks * _size_meta_data;
+    return allocated_blocks * _size_meta_data();
 }
 
 size_t _size_meta_data() {
