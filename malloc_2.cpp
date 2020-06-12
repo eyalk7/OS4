@@ -1,6 +1,12 @@
 #include <unistd.h>
 #include <string.h>
 
+
+/*---------------DECLARATIONS-----------------------------------*/
+#define MAX_ALLOC 100000000
+
+size_t _size_meta_data();
+
 size_t free_blocks, free_bytes, allocated_blocks, allocated_bytes;
 
 struct MallocMetadata {
@@ -13,6 +19,10 @@ struct MallocMetadata {
 // head of free blocks list
 MallocMetadata dummy_free;
 
+
+
+
+/*---------------HELPER FUNCTIONS---------------------------/
 /***
  * @param block - a free block to be added to the free list
  */
@@ -47,40 +57,80 @@ void removeFromFreeList(MallocMetadata* block) {
     block->next = nullptr;
 }
 
+
+
+/*------------ASSIGNMENT FUNCTION----------------------------------*/
 void* smalloc(size_t size) {
     // check conditions
-    if (size == 0) return nullptr;
+    if (size == 0 || size > MAX_ALLOC) return nullptr;
 
+    // find the first free block that have enough size
+    MallocMetadata* to_alloc = dummy_free.next;
+    while (to_alloc) {
+        if (to_alloc->size >= size) break;
+    }
+    if (to_alloc) { // we found a block!
+        // mark block as alloced
+        to_alloc->is_free = false;
 
-    // search the first free that have enough size in the list
-    // update free_blocks, free_bytes
-    // remove from list
+        // update free_blocks, free_bytes
+        free_blocks--;
+        free_bytes -= to_alloc->size;
 
-    // if no, allocate with sbrk + _size_meta_data()
-    // add meta (die in spanish)
+        // remove from list
+        removeFromFreeList(to_alloc);
+
+        // return the address after the metadata
+        return (char*)to_alloc + _size_meta_data();
+    }
+
+    // the previous program break will be the new block's place
+    MallocMetadata* new_block = (MallocMetadata*) sbrk(0);
+    if (new_block == (void*)(-1)) return nullptr; // somthing went wrong
+
+    // allocate with sbrk
+    void* res = sbrk(_size_meta_data() + size);
+    if (res == (void*)(-1)) return nullptr; // sbrk failed
+
+    // add metadata
+    new_block->size = size;
+    new_block->is_free = false;
+    new_block->next = nullptr;
+    new_block->prev = nullptr;
+
     // update allocated_blocks, allocated_bytes
+    allocated_blocks++;
+    allocated_bytes += size;
 
     // when return, don't forget the offset
-
+    return (char*)new_block + _size_meta_data();
 }
 
 void* scalloc(size_t num, size_t size) {
     // use smalloc with num * size
+    void* alloc = smalloc(num * size);
 
     // nullify with memset
+    memset(alloc, 0, num * size);
 
+    return alloc;
 }
 
 void sfree(void* p) {
     // check if null or released
-
-    // use p - _size_meta_data()
+    if (!p) return;
+    MallocMetadata* meta = (MallocMetadata*) ((char*)p - _size_meta_data());
+    if (meta->is_free) return;
 
     // mark as released
+    meta->is_free = true;
 
-    // add to list (call function)
+    // add to free list
+    addToFreeList(meta);
+
     // update used free_blocks, free_bytes
-
+    free_blocks++;
+    free_bytes += meta->size;
 }
 
 void* srealloc(void* oldp, size_t size) {

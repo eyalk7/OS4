@@ -1,6 +1,11 @@
 #include <unistd.h>
 #include <string.h>
 
+/*---------------DECLARATIONS-----------------------------------*/
+#define MAX_ALLOC 100000000
+
+size_t _size_meta_data();
+
 size_t free_blocks, free_bytes, allocated_blocks, allocated_bytes;
 
 struct MallocMetadata {
@@ -22,15 +27,44 @@ MallocMetadata* wilderness;
 
 #define LARGE_ENOUGH (old_size - _size_meta_data() - size) >= 128)
 
+
+
+
+/*---------------HELPER FUNCTIONS---------------------------/
+/***
+ * @param block - a free block to be added to the free list
+ */
 void addToFreeList(MallocMetadata* block) {
     // traverse from dummy
-    // find proper place
-    // add
+    MallocMetadata* iter = &dummy_free;
+    while (iter->next_free) {
+        if (iter->next_free->size > block->size) { // find proper place
+            // add
+            block->prev_free = iter;
+            block->next_free = iter->next_free;
+            iter->next_free->prev_free = block;
+            iter->next_free = block;
+
+            return;
+        }
+    }
+
+    // add at end of list
+    block->next_free = nullptr;
+    block->prev_free = iter;
+    iter->next_free = block;
 }
 
+/***
+ * @param block - an allocated block to be removed from the free list
+ */
 void removeFromFreeList(MallocMetadata* block) {
-    // prev next next prev
+    block->prev_free->next_free = block->next_free;
+    block->next_free->prev_free = block->prev_free;
+    block->prev_free = nullptr;
+    block->next_free = nullptr;
 }
+
 
 // block is a free block
 void cutBlocks(MallocMetadata* block, size_t wanted_size) {
@@ -64,7 +98,10 @@ void combineBlocks(MallocMetadata* block) {
 }
 
 
+/*------------ASSIGNMENT FUNCTION----------------------------------*/
 void* smalloc(size_t size) {
+
+
     // conditions
 
     // if size >= 128*1024 use mmap (+_size_meta_data())
@@ -86,16 +123,68 @@ void* smalloc(size_t size) {
     // update wilderness
 
     // when return, don't forget the offset
+
+
+
+    // check conditions
+    if (size == 0 || size > MAX_ALLOC) return nullptr;
+
+    // find the first free block that have enough size
+    MallocMetadata* to_alloc = dummy_free.next;
+    while (to_alloc) {
+        if (to_alloc->size >= size) break;
+    }
+    if (to_alloc) { // we found a block!
+        // mark block as alloced
+        to_alloc->is_free = false;
+
+        // update free_blocks, free_bytes
+        free_blocks--;
+        free_bytes -= to_alloc->size;
+
+        // remove from list
+        removeFromFreeList(to_alloc);
+
+        // return the address after the metadata
+        return (char*)to_alloc + _size_meta_data();
+    }
+
+    // the previous program break will be the new block's place
+    MallocMetadata* new_block = (MallocMetadata*) sbrk(0);
+    if (new_block == (void*)(-1)) return nullptr; // somthing went wrong
+
+    // allocate with sbrk
+    void* res = sbrk(_size_meta_data() + size);
+    if (res == (void*)(-1)) return nullptr; // sbrk failed
+
+    // add metadata
+    new_block->size = size;
+    new_block->is_free = false;
+    new_block->next = nullptr;
+    new_block->prev = nullptr;
+
+    // update allocated_blocks, allocated_bytes
+    allocated_blocks++;
+    allocated_bytes += size;
+
+    // when return, don't forget the offset
+    return (char*)new_block + _size_meta_data();
 }
 
 void* scalloc(size_t num, size_t size) {
     // use smalloc with num * size
+    void* alloc = smalloc(num * size);
 
     // nullify with memset
+    memset(alloc, 0, num * size);
 
+    return alloc;
 }
 
 void sfree(void* p) {
+
+
+
     // check if null or released
 
     // use p - _size_meta_data()
@@ -109,6 +198,23 @@ void sfree(void* p) {
     // update used free_blocks, free_bytes
     // call combine
 
+
+
+
+    // check if null or released
+    if (!p) return;
+    MallocMetadata* meta = (MallocMetadata*) ((char*)p - _size_meta_data());
+    if (meta->is_free) return;
+
+    // mark as released
+    meta->is_free = true;
+
+    // add to free list
+    addToFreeList(meta);
+
+    // update used free_blocks, free_bytes
+    free_blocks++;
+    free_bytes += meta->size;
 }
 
 void* srealloc(void* oldp, size_t size) {
