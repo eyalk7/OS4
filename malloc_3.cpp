@@ -1,8 +1,11 @@
 #include <unistd.h>
 #include <string.h>
+#include <sys/mman.h>
+#include <assert.h>
 
 /*---------------DECLARATIONS-----------------------------------*/
 #define MAX_ALLOC 100000000
+#define MMAP_THRESHOLD 131072
 
 size_t _size_meta_data();
 
@@ -25,12 +28,13 @@ MallocMetadata dummy_free; // sorted list by size
 MallocMetadata* heap_head;
 MallocMetadata* wilderness;
 
-#define LARGE_ENOUGH (old_size - _size_meta_data() - size) >= 128)
 
+/*---------------HELPER FUNCTIONS---------------------------*/
 
+bool LARGE_ENOUGH(size_t old_size, size_t size) {
+    return ( (old_size - _size_meta_data() - size) >= 128);
+}
 
-
-/*---------------HELPER FUNCTIONS---------------------------/
 /***
  * @param block - a free block to be added to the free list
  */
@@ -65,23 +69,33 @@ void removeFromFreeList(MallocMetadata* block) {
     block->next_free = nullptr;
 }
 
-
-// block is a free block
+/***
+ * @param block - a free block that is LARGE ENOUGH to be cut
+ */
 void cutBlocks(MallocMetadata* block, size_t wanted_size) {
-    // put new mata object in (block + wanted_size + _size_meta_data())
+    // put a new meta object in (block + _size_meta_data()  + wanted_size)
+    MallocMetadata* new_block = (MallocMetadata*) ((char*)block + _size_meta_data() + wanted_size);
+    new_block->size = block->size - wanted_size - _size_meta_data();
+    new_block->is_free = true; // new block is free
+    new_block->is_mmap = false; // new block not mmap'ed
 
-    // remove old one from list
-    // add the second block to free_list (start from dummy to find place)
+    // add the new block to free list
+    addToFreeList(new_block);
+
+    // update old block size, remove from free list and add again (so it will be in proper place)
+    block->size = wanted_size;
+    removeFromFreeList(block);
+    addToFreeList(block);
+
     // update global vars
+    allocated_blocks++;                     // created new block
+    allocated_bytes -= _size_meta_data();   // we've allocated this amount of bytes to be
+                                            // metadata from the previously user bytes
 
-    // heap_list update:
-    // second block is next of first block
-    // second block's next is first block next
-
-    // new_mata->size = old_mata->size - ( wanted + _size_meta_data() )
-
-    // is free = true in new meta
-
+    // update heap list
+    new_block->heap_next = block->heap_next;
+    new_block->heap_prev = block;
+    block->heap_next = new_block;
 }
 
 void combineBlocks(MallocMetadata* block) {
@@ -100,41 +114,33 @@ void combineBlocks(MallocMetadata* block) {
 
 /*------------ASSIGNMENT FUNCTION----------------------------------*/
 void* smalloc(size_t size) {
-
-
-    // conditions
-
-    // if size >= 128*1024 use mmap (+_size_meta_data())
-    // update allocated vars
-
-    // search the first free that have enough size in the list
-    // if large enough - cut blocks
-    // update free_blocks, free_bytes
-    // remove from list
-
-    // if no free memory chunk was found big enough.
-    // And the wilderness chunk is free
-    // enlarge the wilderness (sbrk)
-    // (size of wanted-wilderness)
-
-    // if no, allocate with sbrk + _size_meta_data()
-    // add meta (die in spanish)
-    // update allocated_blocks, allocated_bytes
-    // update wilderness
-
-    // when return, don't forget the offset
-
-
-
     // check conditions
     if (size == 0 || size > MAX_ALLOC) return nullptr;
 
+    // if size >= 128*1024 use mmap (+_size_meta_data())
+    if (size >= MMAP_THRESHOLD) {
+        MallocMetadata* alloc = (MallocMetadata*) mmap(NULL, _size_meta_data() + size, PROT_READ | PROT_WRITE, MAP_ANONYMOUS, -1, 0);
+        alloc->size = size;
+        alloc->is_mmap = true;
+
+        // update allocated vars
+        allocated_blocks++;
+        allocated_bytes += size;
+
+        return (char*)alloc + _size_meta_data();
+    }
+
     // find the first free block that have enough size
-    MallocMetadata* to_alloc = dummy_free.next;
+    MallocMetadata* to_alloc = dummy_free.next_free;
     while (to_alloc) {
         if (to_alloc->size >= size) break;
     }
     if (to_alloc) { // we found a block!
+        // if block large enough, cut it
+        if (LARGE_ENOUGH(to_alloc->size, size)) {
+            cutBlocks(to_alloc, size);
+        }
+
         // mark block as alloced
         to_alloc->is_free = false;
 
@@ -149,6 +155,25 @@ void* smalloc(size_t size) {
         return (char*)to_alloc + _size_meta_data();
     }
 
+    // if no free block was found And the wilderness chunk is free enlarge the wilderness (sbrk)
+    if (wilderness->is_free) {
+        size_t missing_size = size - wilderness->size;
+        void* res = sbrk(missing_size);
+        if (res == (void*)(-1)) return nullptr; // something went wrong
+
+        // update global var
+        allocated_bytes += missing_size;
+
+        // update wilderness size & status
+        wilderness->size += missing_size;
+        wilderness->is_free = false;
+
+        // remove wilderness from free list
+        removeFromFreeList(wilderness);
+
+        return (char*)wilderness + _size_meta_data();
+    }
+
     // the previous program break will be the new block's place
     MallocMetadata* new_block = (MallocMetadata*) sbrk(0);
     if (new_block == (void*)(-1)) return nullptr; // somthing went wrong
@@ -159,9 +184,16 @@ void* smalloc(size_t size) {
 
     // add metadata
     new_block->size = size;
+    new_block->is_mmap = false;
     new_block->is_free = false;
-    new_block->next = nullptr;
-    new_block->prev = nullptr;
+    new_block->next_free = nullptr;
+    new_block->prev_free = nullptr;
+    new_block->heap_next = nullptr;
+    new_block->heap_prev = wilderness;
+
+    // update wilderness
+    wilderness->heap_next = new_block;
+    wilderness = new_block;
 
     // update allocated_blocks, allocated_bytes
     allocated_blocks++;
@@ -182,29 +214,22 @@ void* scalloc(size_t num, size_t size) {
 }
 
 void sfree(void* p) {
-
-
-
-    // check if null or released
-
-    // use p - _size_meta_data()
-
-    // if block is mmap'ed use munmap
-    // update allocated_blocks, allocated_bytes (no need to update free)
-
-    // mark as released
-
-    // add to free_list (call function)
-    // update used free_blocks, free_bytes
-    // call combine
-
-
-
-
     // check if null or released
     if (!p) return;
     MallocMetadata* meta = (MallocMetadata*) ((char*)p - _size_meta_data());
     if (meta->is_free) return;
+
+    // if block is mmap'ed than munmap
+    if (meta->is_mmap) {
+        // update allocated_blocks, allocated_bytes
+        allocated_blocks--;
+        allocated_bytes -= meta->size;
+
+        // unmap
+        assert(munmap(meta, meta->size + _size_meta_data()) == 0);
+
+        return;
+    }
 
     // mark as released
     meta->is_free = true;
@@ -215,6 +240,9 @@ void sfree(void* p) {
     // update used free_blocks, free_bytes
     free_blocks++;
     free_bytes += meta->size;
+
+    // call combine
+    combineBlocks(meta);
 }
 
 void* srealloc(void* oldp, size_t size) {
