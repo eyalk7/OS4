@@ -15,12 +15,19 @@ struct MallocMetadata {
     MallocMetadata* heap_prev; // sorted by address
 };
 
+bool FIRST_ALLOC;
+
 MallocMetadata dummy_free; // sorted list by size
 
 MallocMetadata* heap_head;
 MallocMetadata* wilderness;
 
-#define LARGE_ENOUGH (old_size - _size_meta_data() - size) >= 128)
+#define LARGE_ENOUGH (old_size - sizeof(MallocMetaData) - size) >= 128)
+
+size_t align(size_t size) {
+    // if size % 8 == 0 just return
+    // ( (size / 8) + 1) * 8
+}
 
 void addToFreeList(MallocMetadata* block) {
     // traverse from dummy
@@ -34,7 +41,7 @@ void removeFromFreeList(MallocMetadata* block) {
 
 // block is a free block
 void cutBlocks(MallocMetadata* block, size_t wanted_size) {
-    // put new mata object in (block + wanted_size + _size_meta_data())
+    // put new mata object in (block + wanted_size + sizeof(mata))
 
     // remove old one from list
     // add the second block to free_list (start from dummy to find place)
@@ -44,30 +51,35 @@ void cutBlocks(MallocMetadata* block, size_t wanted_size) {
     // second block is next of first block
     // second block's next is first block next
 
-    // new_mata->size = old_mata->size - ( wanted + _size_meta_data() )
+    // new_mata->size = old_mata->size - ( wanted + sizeof(mata) )
 
     // is free = true in new meta
 
 }
 
 void combineBlocks(MallocMetadata* block) {
-     // 4 options:
+    // 4 options:
     // prev_heap+curr+next_heap
     // curr+next_heap
-     // prev_heap + curr
+    // prev_heap + curr
     // no combinations
 
-     // if combined, remove from free list and add the new one
-     // update global vars
-     // update heap_list
+    // if combined, remove from free list and add the new one
+    // update global vars
+    // update heap_list
 
 }
 
 
 void* smalloc(size_t size) {
+    // if FIRST ALLOC:
+    // check if (sbrk(0) % 8 != 0) align (only affective for first alloc)
+
     // conditions
 
-    // if size >= 128*1024 use mmap (+_size_meta_data())
+    // align size
+
+    // if size >= 128*1024 use mmap (+sizeof(meta))
     // update allocated vars
 
     // search the first free that have enough size in the list
@@ -77,10 +89,10 @@ void* smalloc(size_t size) {
 
     // if no free memory chunk was found big enough.
     // And the wilderness chunk is free
-    // enlarge the wilderness (sbrk)
+    // enlarge the wilderness (sbrk) (aligned!)
     // (size of wanted-wilderness)
 
-    // if no, allocate with sbrk + _size_meta_data()
+    // if no, allocate with sbrk + sizeof (mata)
     // add meta (die in spanish)
     // update allocated_blocks, allocated_bytes
     // update wilderness
@@ -98,7 +110,7 @@ void* scalloc(size_t num, size_t size) {
 void sfree(void* p) {
     // check if null or released
 
-    // use p - _size_meta_data()
+    // use p - sizeof(metadata)
 
     // if block is mmap'ed use munmap
     // update allocated_blocks, allocated_bytes (no need to update free)
@@ -117,7 +129,7 @@ void* srealloc(void* oldp, size_t size) {
     // if size is smaller, reuse
     // don't update global vars
 
-    // if mmap - unmap and than mmap (+_size_meta_data()
+    // if mmap - unmap and than mmap
     // update allocated vars
 
     // try merging (prev_heap, upper_heap, three blocks)
@@ -126,7 +138,7 @@ void* srealloc(void* oldp, size_t size) {
     // update free_list (you need to remove prev or next you used)
     // update free global vars
 
-    // if i'm wilderness enlarge brk
+    // if i'm wilderness enlarge brk (aligned!)
     // update global vars
 
     // find new place with smalloc
@@ -158,5 +170,5 @@ size_t _num_meta_data_bytes() {
 }
 
 size_t _size_meta_data() {
-    return sizeof(MallocMetadata);
+    return align(sizeof(MallocMetadata));
 }
