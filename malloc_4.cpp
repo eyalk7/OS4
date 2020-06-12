@@ -23,7 +23,8 @@ struct MallocMetadata {
     MallocMetadata* heap_prev; // sorted by address
 };
 
-MallocMetadata dummy_free; // sorted list by size
+// sorted list by size
+MallocMetadata dummy_free = {0, false, nullptr, nullptr, nullptr, nullptr};
 
 MallocMetadata* heap_head;
 MallocMetadata* wilderness;
@@ -59,6 +60,8 @@ void addToFreeList(MallocMetadata* block) {
 
             return;
         }
+
+        iter = iter->next_free;
     }
 
     // add at end of list
@@ -156,6 +159,7 @@ void* smalloc(size_t size) {
     MallocMetadata* to_alloc = dummy_free.next_free;
     while (to_alloc) {
         if (to_alloc->size >= size) break;
+        to_alloc = to_alloc->next_free;
     }
     if (to_alloc) { // we found a block!
         // if block large enough, cut it

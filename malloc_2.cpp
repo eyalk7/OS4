@@ -17,8 +17,7 @@ struct MallocMetadata {
 };
 
 // head of free blocks list
-MallocMetadata dummy_free;
-
+MallocMetadata dummy_free = {0, false, nullptr, nullptr};
 
 
 
@@ -39,6 +38,8 @@ void addToFreeList(MallocMetadata* block) {
 
             return;
         }
+
+        iter = iter->next;
     }
 
     // add at end of list
@@ -68,6 +69,7 @@ void* smalloc(size_t size) {
     MallocMetadata* to_alloc = dummy_free.next;
     while (to_alloc) {
         if (to_alloc->size >= size) break;
+        to_alloc = to_alloc->next;
     }
     if (to_alloc) { // we found a block!
         // mark block as alloced
@@ -86,7 +88,7 @@ void* smalloc(size_t size) {
 
     // the previous program break will be the new block's place
     MallocMetadata* new_block = (MallocMetadata*) sbrk(0);
-    if (new_block == (void*)(-1)) return nullptr; // somthing went wrong
+    if (new_block == (void*)(-1)) return nullptr; // something went wrong
 
     // allocate with sbrk
     void* res = sbrk(_size_meta_data() + size);
