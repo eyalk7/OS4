@@ -1,6 +1,5 @@
 #include <unistd.h>
-using std::memcpy;
-using std::memset;
+#include <string.h>
 
 size_t free_blocks, free_bytes, allocated_blocks, allocated_bytes;
 
@@ -12,20 +11,46 @@ struct MallocMetadata {
 };
 
 // head of free blocks list
-MallocMetadata dummy;
+MallocMetadata dummy_free;
 
+/***
+ * @param block - a free block to be added to the free list
+ */
 void addToFreeList(MallocMetadata* block) {
     // traverse from dummy
-    // find proper place
-    // add
+    MallocMetadata* iter = &dummy_free;
+    while (iter->next) {
+        if (iter->next->size > block->size) { // find proper place
+            // add
+            block->prev = iter;
+            block->next = iter->next;
+            iter->next->prev = block;
+            iter->next = block;
+
+            return;
+        }
+    }
+
+    // add at end of list
+    block->next = nullptr;
+    block->prev = iter;
+    iter->next = block;
 }
 
+/***
+ * @param block - an allocated block to be removed from the free list
+ */
 void removeFromFreeList(MallocMetadata* block) {
-    // prev next next prev
+    block->prev->next = block->next;
+    block->next->prev = block->prev;
+    block->prev = nullptr;
+    block->next = nullptr;
 }
 
 void* smalloc(size_t size) {
-    // conditions
+    // check conditions
+    if (size == 0) return nullptr;
+
 
     // search the first free that have enough size in the list
     // update free_blocks, free_bytes

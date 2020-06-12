@@ -1,6 +1,6 @@
 #include <unistd.h>
-using std::memcpy;
-using std::memset;
+#include <string.h>
+
 size_t free_blocks, free_bytes, allocated_blocks, allocated_bytes;
 
 struct MallocMetadata {
@@ -25,12 +25,13 @@ MallocMetadata* wilderness;
 #define LARGE_ENOUGH (old_size - sizeof(MallocMetaData) - size) >= 128)
 
 size_t align(size_t size) {
-    // if size % 8 == 0 just return
-    // ( (size / 8) + 1) * 8
+    if (size % 8 == 0) return size;
+    return ((size / 8) + 1) * 8;
 }
 
 void addToFreeList(MallocMetadata* block) {
     // traverse from dummy
+
     // find proper place
     // add
 }

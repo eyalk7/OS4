@@ -1,6 +1,6 @@
 #include <unistd.h>
-using std::memcpy;
-using std::memset;
+#include <string.h>
+
 size_t free_blocks, free_bytes, allocated_blocks, allocated_bytes;
 
 struct MallocMetadata {
