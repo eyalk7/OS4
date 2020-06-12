@@ -26,6 +26,8 @@ MallocMetadata dummy_free = {0, false, nullptr, nullptr};
  * @param block - a free block to be added to the free list
  */
 void addToFreeList(MallocMetadata* block) {
+    assert(block);
+
     // traverse from dummy
     MallocMetadata* iter = &dummy_free;
     while (iter->next) {
@@ -52,8 +54,10 @@ void addToFreeList(MallocMetadata* block) {
  * @param block - an allocated block to be removed from the free list
  */
 void removeFromFreeList(MallocMetadata* block) {
-    block->prev->next = block->next;
-    block->next->prev = block->prev;
+    assert(block);
+
+    if (block->prev) block->prev->next = block->next;
+    if (block->next) block->next->prev = block->prev;
     block->prev = nullptr;
     block->next = nullptr;
 }

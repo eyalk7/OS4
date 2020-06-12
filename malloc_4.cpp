@@ -24,12 +24,10 @@ struct MallocMetadata {
 };
 
 // sorted list by size
-MallocMetadata dummy_free = {0, false, nullptr, nullptr, nullptr, nullptr};
+MallocMetadata dummy_free = {0, false, false, nullptr, nullptr, nullptr, nullptr};
 
-MallocMetadata* heap_head;
-MallocMetadata* wilderness;
-
-bool FIRST_ALLOC = true;
+MallocMetadata* heap_head = nullptr;
+MallocMetadata* wilderness = nullptr;
 
 
 
@@ -48,6 +46,8 @@ bool LARGE_ENOUGH(size_t old_size, size_t size) {
  * @param block - a free block to be added to the free list
  */
 void addToFreeList(MallocMetadata* block) {
+    assert(block);
+
     // traverse from dummy
     MallocMetadata* iter = &dummy_free;
     while (iter->next_free) {
@@ -74,8 +74,10 @@ void addToFreeList(MallocMetadata* block) {
  * @param block - an allocated block to be removed from the free list
  */
 void removeFromFreeList(MallocMetadata* block) {
-    block->prev_free->next_free = block->next_free;
-    block->next_free->prev_free = block->prev_free;
+    assert(block);
+
+    if (block->prev_free) block->prev_free->next_free = block->next_free;
+    if (block->next_free) block->next_free->prev_free = block->prev_free;
     block->prev_free = nullptr;
     block->next_free = nullptr;
 }
@@ -125,7 +127,7 @@ void combineBlocks(MallocMetadata* block) {
 /*------------ASSIGNMENT FUNCTION----------------------------------*/
 void* smalloc(size_t size) {
     // if FIRST ALLOC
-    if (FIRST_ALLOC) {
+    if (!heap_head) {
         void* program_break = sbrk(0);
         if (program_break == (void*)(-1)) return nullptr; // something went wrong
 
@@ -182,7 +184,7 @@ void* smalloc(size_t size) {
     }
 
     // if no free block was found And the wilderness chunk is free enlarge the wilderness (sbrk)
-    if (wilderness->is_free) {
+    if (wilderness && wilderness->is_free) {
         size_t missing_size = size - wilderness->size; // both product of 8 so it's ok
         void* res = sbrk(missing_size);
         if (res == (void*)(-1)) return nullptr; // something went wrong
@@ -215,11 +217,17 @@ void* smalloc(size_t size) {
     new_block->next_free = nullptr;
     new_block->prev_free = nullptr;
     new_block->heap_next = nullptr;
-    new_block->heap_prev = wilderness;
+    new_block->heap_prev = wilderness; // if no wilderness: wilderness == nullptr, so it's ok
 
     // update wilderness
-    wilderness->heap_next = new_block;
+    if (wilderness) wilderness->heap_next = new_block;
     wilderness = new_block;
+
+    // if first allocation initialize heap_head and wilderness
+    if (!heap_head) {
+        heap_head = new_block;
+        wilderness = new_block;
+    }
 
     // update allocated_blocks, allocated_bytes
     allocated_blocks++;

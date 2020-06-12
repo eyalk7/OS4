@@ -24,10 +24,10 @@ struct MallocMetadata {
 };
 
 // sorted list by size
-MallocMetadata dummy_free = {0, false, nullptr, nullptr, nullptr, nullptr};
+MallocMetadata dummy_free = {0, false, false, nullptr, nullptr, nullptr, nullptr};
 
-MallocMetadata* heap_head;
-MallocMetadata* wilderness;
+MallocMetadata* heap_head = nullptr;
+MallocMetadata* wilderness = nullptr;
 
 
 /*---------------HELPER FUNCTIONS---------------------------*/
@@ -40,6 +40,8 @@ bool LARGE_ENOUGH(size_t old_size, size_t size) {
  * @param block - a free block to be added to the free list
  */
 void addToFreeList(MallocMetadata* block) {
+    assert(block);
+
     // traverse from dummy
     MallocMetadata* iter = &dummy_free;
     while (iter->next_free) {
@@ -66,8 +68,10 @@ void addToFreeList(MallocMetadata* block) {
  * @param block - an allocated block to be removed from the free list
  */
 void removeFromFreeList(MallocMetadata* block) {
-    block->prev_free->next_free = block->next_free;
-    block->next_free->prev_free = block->prev_free;
+    assert(block);
+
+    if (block->prev_free) block->prev_free->next_free = block->next_free;
+    if (block->next_free) block->next_free->prev_free = block->prev_free;
     block->prev_free = nullptr;
     block->next_free = nullptr;
 }
@@ -160,13 +164,15 @@ void* smalloc(size_t size) {
     }
 
     // if no free block was found And the wilderness chunk is free enlarge the wilderness (sbrk)
-    if (wilderness->is_free) {
+    if (wilderness && wilderness->is_free) {
         size_t missing_size = size - wilderness->size;
         void* res = sbrk(missing_size);
         if (res == (void*)(-1)) return nullptr; // something went wrong
 
         // update global var
         allocated_bytes += missing_size;
+        free_bytes -= wilderness->size;
+        free_blocks--;
 
         // update wilderness size & status
         wilderness->size += missing_size;
@@ -193,11 +199,18 @@ void* smalloc(size_t size) {
     new_block->next_free = nullptr;
     new_block->prev_free = nullptr;
     new_block->heap_next = nullptr;
-    new_block->heap_prev = wilderness;
+    new_block->heap_prev = wilderness; // if no wilderness: wilderness == nullptr, so it's ok
 
     // update wilderness
-    wilderness->heap_next = new_block;
+    if (wilderness) wilderness->heap_next = new_block;
     wilderness = new_block;
+
+    // if first allocation initialize heap_head and wilderness
+    if (!heap_head) {
+        heap_head = new_block;
+        wilderness = new_block;
+    }
+
 
     // update allocated_blocks, allocated_bytes
     allocated_blocks++;
