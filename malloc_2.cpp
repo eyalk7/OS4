@@ -115,6 +115,7 @@ void* smalloc(size_t size) {
 void* scalloc(size_t num, size_t size) {
     // use smalloc with num * size
     void* alloc = smalloc(num * size);
+    if (!alloc) return nullptr;
 
     // nullify with memset
     memset(alloc, 0, num * size);

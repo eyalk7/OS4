@@ -223,6 +223,7 @@ void* smalloc(size_t size) {
 void* scalloc(size_t num, size_t size) {
     // use smalloc with num * size
     void* alloc = smalloc(num * size);
+    if (!alloc) return nullptr;
 
     // if mmaped no need to nullify
     if (((MallocMetadata*)((char*)alloc - _size_meta_data()))->is_mmap) return alloc;
