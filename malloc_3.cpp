@@ -7,6 +7,8 @@
 #define MAX_ALLOC 100000000
 #define MMAP_THRESHOLD 131072 // = 128*1024
 
+void* smalloc(size_t size);
+void sfree(void* p);
 size_t _size_meta_data();
 
 size_t free_blocks, free_bytes, allocated_blocks, allocated_bytes;
@@ -28,7 +30,6 @@ MallocMetadata dummy_free = {0, false, false, nullptr, nullptr, nullptr, nullptr
 
 MallocMetadata* heap_head = nullptr;
 MallocMetadata* wilderness = nullptr;
-
 
 /*---------------HELPER FUNCTIONS---------------------------*/
 
@@ -116,6 +117,19 @@ void combineBlocks(MallocMetadata* block) {
      // update global vars
      // update heap_list
 
+}
+
+void* reallocate(void* oldp, size_t old_size, size_t new_size) {
+    void* newp = smalloc(new_size);
+    if (newp == nullptr) return nullptr;    // smalloc failed
+
+    // copy old data to new block using memcpy
+    memcpy(newp, oldp, old_size);
+
+    // free old data using sfree (only if you succeed until now)
+    sfree(oldp);
+
+    return newp;
 }
 
 
@@ -277,11 +291,12 @@ void* srealloc(void* oldp, size_t size) {
     auto meta = (MallocMetadata*) ((char*)oldp - _size_meta_data());
     size_t old_size = meta->size;
 
-    /// PART 3 REALLOC CHANGES
-
-    // check if old block is mmap()-ed or not
-    // if mmap()-ed then re-mmap (unmap the old block) regardless of size
-    // else then check size...
+    // if old_block is mmap()-ed
+    if (meta->is_mmap) {
+        // mmap() new block using smalloc (size >= MMAP_THRESHOLD)
+        // copy data, and free old block
+        return reallocate(oldp, old_size, size);
+    }
 
     // if size is smaller, reuse the same block
     if (size <= old_size) return oldp;
@@ -293,9 +308,6 @@ void* srealloc(void* oldp, size_t size) {
 
     // if size > old_size then try enlarging heap before merge check
 
-    // if mmap - unmap and than mmap (+_size_meta_data())
-    // update allocated vars
-
     // try merging (prev_heap, upper_heap, three blocks)
     // if large enough call cut block
     // update heap_list
@@ -305,14 +317,8 @@ void* srealloc(void* oldp, size_t size) {
     /// PART 3 REALLOC CHANGES
 
     // Ohterwise, find new block using smalloc
-    void* newp = smalloc(size);
-    if (newp == nullptr) return nullptr;    // smalloc failed
-
-    // copy old data to new block using memcpy
-    memcpy(newp, oldp, old_size);
-
-    // free old data using sfree (only if you succeed until now)
-    sfree(oldp);
+    // copy data, and free old block
+    return reallocate(oldp, old_size, size);
 }
 
 size_t _num_free_blocks() {
