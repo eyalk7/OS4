@@ -132,6 +132,21 @@ void* reallocate(void* oldp, size_t old_size, size_t new_size) {
     return newp;
 }
 
+void* enlargeWilderness(size_t size) {
+    size_t missing_size = size - wilderness->size;
+    void* res = sbrk(missing_size);
+    if (res == (void*)(-1)) return nullptr; // something went wrong
+
+    // update global var
+    allocated_bytes += missing_size;
+    free_bytes -= wilderness->size;
+    free_blocks--;
+
+    // update wilderness size
+    wilderness->size += missing_size;
+
+    return (char*)wilderness + _size_meta_data();
+}
 
 /*------------ASSIGNMENT FUNCTIONS----------------------------------*/
 void* smalloc(size_t size) {
@@ -177,25 +192,19 @@ void* smalloc(size_t size) {
         return (char*)to_alloc + _size_meta_data();
     }
 
-    // if no free block was found And the wilderness chunk is free enlarge the wilderness (sbrk)
+    // if no free block was found And the wilderness chunk is free
     if (wilderness && wilderness->is_free) {
-        size_t missing_size = size - wilderness->size;
-        void* res = sbrk(missing_size);
-        if (res == (void*)(-1)) return nullptr; // something went wrong
+        // enlarge the wilderness (sbrk)
+        void* res = enlargeWilderness(size);
+        if (res == nullptr) return nullptr; // something went wrong
 
-        // update global var
-        allocated_bytes += missing_size;
-        free_bytes -= wilderness->size;
-        free_blocks--;
-
-        // update wilderness size & status
-        wilderness->size += missing_size;
+        // update wilderness status
         wilderness->is_free = false;
 
         // remove wilderness from free list
         removeFromFreeList(wilderness);
 
-        return (char*)wilderness + _size_meta_data();
+        return res; // (pointer already includes metadata offset)
     }
 
     // the previous program break will be the new block's place
@@ -298,13 +307,19 @@ void* srealloc(void* oldp, size_t size) {
         return reallocate(oldp, old_size, size);
     }
 
-    // if size is smaller, reuse the same block
-    if (size <= old_size) return oldp;
+    // if not mmap()=ed and size is smaller
+    if (size <= old_size) return oldp; // reuse the same block
 
-    // don't update global vars
+    // Othewise, need to try and enlarge the block
+    // From here onwards size > old_Size
 
-    // if i'm wilderness enlarge brk
-    // update global vars
+    // If wilderness block was given
+    if (meta == wilderness && meta->heap_next == nullptr) {
+        // enlarge wilderness block and update global vars
+        return enlargeWilderness(size);
+        // (pointer already includes metadata offset)
+        // nullptr is returned if something went wrong
+    }
 
     // if size > old_size then try enlarging heap before merge check
 
@@ -314,9 +329,7 @@ void* srealloc(void* oldp, size_t size) {
     // update free_list (you need to remove prev or next you used)
     // update free global vars
 
-    /// PART 3 REALLOC CHANGES
-
-    // Ohterwise, find new block using smalloc
+    // Final option: find new block in heap using smalloc
     // copy data, and free old block
     return reallocate(oldp, old_size, size);
 }

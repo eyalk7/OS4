@@ -20,7 +20,6 @@ struct MallocMetadata {
 MallocMetadata dummy_free = {0, false, nullptr, nullptr};
 
 
-
 /*---------------HELPER FUNCTIONS---------------------------/
 /***
  * @param block - a free block to be added to the free list
@@ -161,6 +160,8 @@ void* srealloc(void* oldp, size_t size) {
 
     // free old data using sfree (only if you succeed until now)
     sfree(oldp);
+
+    return newp;
 }
 
 size_t _num_free_blocks() {
