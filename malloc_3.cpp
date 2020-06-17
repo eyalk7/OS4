@@ -119,7 +119,7 @@ void combineBlocks(MallocMetadata* block) {
 }
 
 
-/*------------ASSIGNMENT FUNCTION----------------------------------*/
+/*------------ASSIGNMENT FUNCTIONS----------------------------------*/
 void* smalloc(size_t size) {
     // check conditions
     if (size == 0 || size > MAX_ALLOC) return nullptr;

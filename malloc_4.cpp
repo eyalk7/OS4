@@ -124,7 +124,7 @@ void combineBlocks(MallocMetadata* block) {
 
 }
 
-/*------------ASSIGNMENT FUNCTION----------------------------------*/
+/*------------ASSIGNMENT FUNCTIONS----------------------------------*/
 void* smalloc(size_t size) {
     // if FIRST ALLOC
     if (!heap_head) {

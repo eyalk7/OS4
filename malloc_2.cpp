@@ -62,9 +62,7 @@ void removeFromFreeList(MallocMetadata* block) {
     block->next = nullptr;
 }
 
-
-
-/*------------ASSIGNMENT FUNCTION----------------------------------*/
+/*------------ASSIGNMENT FUNCTIONS----------------------------------*/
 void* smalloc(size_t size) {
     // check conditions
     if (size == 0 || size > MAX_ALLOC) return nullptr;
@@ -141,16 +139,28 @@ void sfree(void* p) {
 }
 
 void* srealloc(void* oldp, size_t size) {
-    // if old == null just smalloc
+    // check parameters
+    if (size == 0 || size > MAX_ALLOC) return nullptr;
 
-    // if size is smaller, reuse
+    // if given null pointer, allocate normally
+    if (oldp == nullptr)
+        return smalloc(size);
 
-    // find new place with smalloc
+    auto meta = (MallocMetadata*) ((char*)oldp - _size_meta_data());
+    size_t old_size = meta->size;
 
-    // copy with memcpy
+    // if size is smaller, reuse the same block
+    if (size <= old_size) return oldp;
 
-    // free with sfree (only if you succeed until now)
+    // Ohterwise, find new block using smalloc
+    void* newp = smalloc(size);
+    if (newp == nullptr) return nullptr;    // smalloc failed
 
+    // copy old data to new block using memcpy
+    memcpy(newp, oldp, old_size);
+
+    // free old data using sfree (only if you succeed until now)
+    sfree(oldp);
 }
 
 size_t _num_free_blocks() {
