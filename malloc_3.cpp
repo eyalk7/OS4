@@ -5,7 +5,7 @@
 
 /*---------------DECLARATIONS-----------------------------------*/
 #define MAX_ALLOC 100000000
-#define MMAP_THRESHOLD 131072
+#define MMAP_THRESHOLD 131072 // = 128*1024
 
 size_t _size_meta_data();
 
@@ -267,12 +267,33 @@ void sfree(void* p) {
 }
 
 void* srealloc(void* oldp, size_t size) {
-    // if old == null just smalloc
+    // check parameters
+    if (size == 0 || size > MAX_ALLOC) return nullptr;
 
-    // if size is smaller, reuse
+    // if given null pointer, allocate normally
+    if (oldp == nullptr)
+        return smalloc(size);
+
+    auto meta = (MallocMetadata*) ((char*)oldp - _size_meta_data());
+    size_t old_size = meta->size;
+
+    /// PART 3 REALLOC CHANGES
+
+    // check if old block is mmap()-ed or not
+    // if mmap()-ed then re-mmap (unmap the old block) regardless of size
+    // else then check size...
+
+    // if size is smaller, reuse the same block
+    if (size <= old_size) return oldp;
+
     // don't update global vars
 
-    // if mmap - unmap and than mmap (+_size_meta_data()
+    // if i'm wilderness enlarge brk
+    // update global vars
+
+    // if size > old_size then try enlarging heap before merge check
+
+    // if mmap - unmap and than mmap (+_size_meta_data())
     // update allocated vars
 
     // try merging (prev_heap, upper_heap, three blocks)
@@ -281,15 +302,17 @@ void* srealloc(void* oldp, size_t size) {
     // update free_list (you need to remove prev or next you used)
     // update free global vars
 
-    // if i'm wilderness enlarge brk
-    // update global vars
+    /// PART 3 REALLOC CHANGES
 
-    // find new place with smalloc
+    // Ohterwise, find new block using smalloc
+    void* newp = smalloc(size);
+    if (newp == nullptr) return nullptr;    // smalloc failed
 
-    // copy with memcpy
+    // copy old data to new block using memcpy
+    memcpy(newp, oldp, old_size);
 
-    // free with sfree (only if you succeed until now)
-
+    // free old data using sfree (only if you succeed until now)
+    sfree(oldp);
 }
 
 size_t _num_free_blocks() {
