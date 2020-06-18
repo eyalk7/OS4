@@ -33,8 +33,8 @@ MallocMetadata* wilderness = nullptr;
 
 /*---------------HELPER FUNCTIONS---------------------------*/
 
-bool LARGE_ENOUGH(size_t old_size, size_t size) {
-    return ( (old_size - _size_meta_data() - size) >= 128);
+bool LARGE_ENOUGH(MallocMetadata* block, size_t size) {
+    return ( (block->size - _size_meta_data() - size) >= 128);
 }
 
 /***
@@ -59,6 +59,8 @@ void addToFreeList(MallocMetadata* block) {
         iter = iter->next_free;
     }
 
+    block->is_free = true;
+
     // add at end of list
     block->next_free = nullptr;
     block->prev_free = iter;
@@ -80,6 +82,8 @@ void removeFromFreeList(MallocMetadata* block) {
     block->prev_free = nullptr;
     block->next_free = nullptr;
 
+    block->is_free = false;
+
     // update used free_blocks, free_bytes
     free_blocks--;
     free_bytes -= block->size;
@@ -99,8 +103,8 @@ void cutBlocks(MallocMetadata* block, size_t wanted_size) {
     addToFreeList(new_block);
 
     // update old block size, remove from free list and add again (so it will be in proper place)
-    block->size = wanted_size;
     removeFromFreeList(block);
+    block->size = wanted_size;
     addToFreeList(block);
 
     // update global vars
@@ -121,17 +125,22 @@ void combineBlocks(MallocMetadata* block) {
     auto prev = block->heap_prev;
     auto next = block->heap_next;
 
-    if (!(prev->is_free || next->is_free)) return; // no combinations to do
+    bool free_prev = prev->is_free;
+    bool free_next = next->is_free;
+
+    if (!free_prev && !free_next) return; // no combinations to do
 
     // actions to be taken in any combination option:
     removeFromFreeList(block); // remove the current block from the free list
     MallocMetadata* new_block = prev;
     size_t new_size = block->size + _size_meta_data();
+    allocated_blocks--;
+    allocated_bytes += _size_meta_data();
 
     // 3 combine options available
 
     // Option 1: Both adjacent blocks
-    if (prev->is_free && next->is_free) {
+    if (free_prev && free_next) {
         // remove previous and next blocks from the free list
         removeFromFreeList(prev);
         removeFromFreeList(next);
@@ -141,7 +150,7 @@ void combineBlocks(MallocMetadata* block) {
         next->heap_next->heap_prev = prev;
         new_size += prev->size + next->size + _size_meta_data();
 
-    } else if (prev->is_free) {
+    } else if (free_prev) {
         // Option 2: Only previous block
 
         // remove previous block from the free list
@@ -152,7 +161,7 @@ void combineBlocks(MallocMetadata* block) {
         block->heap_next->heap_prev = prev;
         prev->size += prev->size;
 
-    } else if (next->is_free) {
+    } else { // if (free_next)
         // Option 3: Only the next block
         new_block = block;
 
@@ -163,11 +172,15 @@ void combineBlocks(MallocMetadata* block) {
         block->heap_next = next->heap_next;
         next->heap_next->heap_prev = block;
         new_size += next->size;
+
+        allocated_blocks--;
+        allocated_bytes += _size_meta_data();
     }
 
     new_block->size = new_size; // update new_block's size
     addToFreeList(new_block);   // insert new block into the free list
                                 // (+ update global variables)
+
 }
 
 void* reallocate(void* oldp, size_t old_size, size_t new_size) {
@@ -200,6 +213,108 @@ void* enlargeWilderness(size_t size) {
     return (char*)wilderness + _size_meta_data();
 }
 
+/***
+ * @param block - an allocated block to merge with adjacent free blocks
+ *                (used for realloc)
+ */
+MallocMetadata* tryMergeWithNeighbor(MallocMetadata* block, size_t wanted_size) {
+    auto prev = block->heap_prev;
+    auto next = block->heap_next;
+
+    bool free_prev = prev->is_free;
+    bool free_next = next->is_free;
+
+    if (!free_prev && !free_next) return nullptr; // merging is not an option
+
+    size_t required_size = wanted_size - block->size - _size_meta_data();
+
+    // Try merging with previous neighbour
+    if (free_prev && prev->size <= required_size) {
+        // remove the free neighbor from free list
+        removeFromFreeList(prev);
+        prev->is_free = false;
+
+        // copy the data to the start of the new block
+        void* copy_from = (char*)block + _size_meta_data();
+        void* copy_to = (char*)prev + _size_meta_data();
+        memcpy(copy_to, copy_from, block->size);
+
+        // update new block's size
+        prev->size += _size_meta_data() + block->size;
+
+        // update heap pointers
+        prev->heap_next = block->heap_next;
+        block->heap_next->heap_prev = prev;
+
+        // update global variables
+        allocated_blocks--;
+        allocated_bytes += _size_meta_data();
+
+
+        return prev;    // return for allocation (not added to free list)
+    }
+
+    // Try merging with next neighbour
+    if (free_next && next->size <= required_size) {
+        // remove the free neighbor from free list
+        removeFromFreeList(next);
+        next->is_free = false;
+
+        // no need to copy the data
+
+        // update new block's size
+        block->size += _size_meta_data() + next->size;
+
+        // update heap pointers
+        block->heap_next = next->heap_next;
+        next->heap_next->heap_prev = block;
+
+        allocated_blocks--;
+        allocated_bytes += _size_meta_data();
+
+        return block;
+    }
+
+    required_size -= _size_meta_data();
+
+    // Try merging with both neighbours
+    if (free_prev && free_next && prev->size + next->size <= required_size) {
+        // remove the free neighbor from free list
+        removeFromFreeList(prev);
+        removeFromFreeList(next);
+        prev->is_free = false;
+
+        // copy the data to the start of the new block
+        void* copy_from = (char*)block + _size_meta_data();
+        void* copy_to = (char*)prev + _size_meta_data();
+        memcpy(copy_to, copy_from, block->size);
+
+        // update new block's size
+        prev->size += 2*_size_meta_data() + block->size + next->size;
+
+        // update heap pointers
+        prev->heap_next = next->heap_next;
+        next->heap_next->heap_prev = prev;
+
+        allocated_blocks -= 2;
+        allocated_bytes += 2*_size_meta_data();
+
+        return prev;    // return for allocation (not added to free list)
+    }
+
+    return nullptr; // merging is not an option
+}
+
+void cutAllocatedBlock(MallocMetadata* block, size_t size) {
+    if (LARGE_ENOUGH(block, size)) {
+        block->is_free = true;
+        addToFreeList(block);
+        cutBlocks(block, size);
+        removeFromFreeList(block);
+        block->is_free = false;
+    }
+}
+
 /*------------ASSIGNMENT FUNCTIONS----------------------------------*/
 void* smalloc(size_t size) {
     // check conditions
@@ -226,7 +341,7 @@ void* smalloc(size_t size) {
     }
     if (to_alloc) { // we found a block!
         // if block large enough, cut it
-        if (LARGE_ENOUGH(to_alloc->size, size)) {
+        if (LARGE_ENOUGH(to_alloc, size)) {
             cutBlocks(to_alloc, size);
         }
 
@@ -341,24 +456,27 @@ void* srealloc(void* oldp, size_t size) {
     if (oldp == nullptr)
         return smalloc(size);
 
-    auto meta = (MallocMetadata*) ((char*)oldp - _size_meta_data());
-    size_t old_size = meta->size;
+    auto block = (MallocMetadata *) ((char *) oldp - _size_meta_data());
+    size_t old_size = block->size;
 
     // if old_block is mmap()-ed
-    if (meta->is_mmap) {
+    if (block->is_mmap) {
         // mmap() new block using smalloc (size >= MMAP_THRESHOLD)
         // copy data, and free old block
         return reallocate(oldp, old_size, size);
     }
 
     // if not mmap()=ed and size is smaller
-    if (size <= old_size) return oldp; // reuse the same block
+    if (size <= old_size) {
+        cutAllocatedBlock(block, size); // try to cut block
+        return oldp; // reuse the same block
+    }
 
     // Othewise, need to try and enlarge the block
     // From here onwards size > old_Size
 
     // If wilderness block was given
-    if (meta == wilderness && meta->heap_next == nullptr) {
+    if (block == wilderness && block->heap_next == nullptr) {
         // enlarge wilderness block and update global vars
         return enlargeWilderness(size);
         // (pointer already includes metadata offset)
@@ -367,15 +485,22 @@ void* srealloc(void* oldp, size_t size) {
 
     // try merging (prev_heap, upper_heap, three blocks)
 
+    // try merging with a neighboring free block
+    // after merge the neighbor blocks are not in the free list
+    // and the old data was copied to the beginning of the block
+    MallocMetadata *merged_block = tryMergeWithNeighbor(block, size);
+    if (!merged_block) {
+        // if merging was not an option
+        // Final option: find new block in heap using smalloc
+        // copy data, and free old block
+        return reallocate(oldp, old_size, size);
+    }
+    // else, merging was done
 
-    // if large enough call cut block
-    // update heap_list
-    // update free_list (you need to remove prev or next you used)
-    // update free global vars
+    cutAllocatedBlock(merged_block, size); // Try to cut blocks
+    merged_block->is_free = false;  // set merged block as not free
 
-    // Final option: find new block in heap using smalloc
-    // copy data, and free old block
-    return reallocate(oldp, old_size, size);
+    return (char *)merged_block + _size_meta_data();
 }
 
 size_t _num_free_blocks() {
