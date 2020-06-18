@@ -63,6 +63,10 @@ void addToFreeList(MallocMetadata* block) {
     block->next_free = nullptr;
     block->prev_free = iter;
     iter->next_free = block;
+
+    // update used free_blocks, free_bytes
+    free_blocks++;
+    free_bytes += block->size;
 }
 
 /***
@@ -75,6 +79,10 @@ void removeFromFreeList(MallocMetadata* block) {
     if (block->next_free) block->next_free->prev_free = block->prev_free;
     block->prev_free = nullptr;
     block->next_free = nullptr;
+
+    // update used free_blocks, free_bytes
+    free_blocks--;
+    free_bytes -= block->size;
 }
 
 /***
@@ -106,17 +114,60 @@ void cutBlocks(MallocMetadata* block, size_t wanted_size) {
     block->heap_next = new_block;
 }
 
+/***
+ * @param block - a free block to merge with adjacent free blocks
+ */
 void combineBlocks(MallocMetadata* block) {
-     // 4 options:
-    // prev_heap+curr+next_heap
-    // curr+next_heap
-     // prev_heap + curr
-    // no combinations
+    auto prev = block->heap_prev;
+    auto next = block->heap_next;
 
-     // if combined, remove from free list and add the new one
-     // update global vars
-     // update heap_list
+    if (!(prev->is_free || next->is_free)) return; // no combinations to do
 
+    // actions to be taken in any combination option:
+    removeFromFreeList(block); // remove the current block from the free list
+    MallocMetadata* new_block = prev;
+    size_t new_size = block->size + _size_meta_data();
+
+    // 3 combine options available
+
+    // Option 1: Both adjacent blocks
+    if (prev->is_free && next->is_free) {
+        // remove previous and next blocks from the free list
+        removeFromFreeList(prev);
+        removeFromFreeList(next);
+
+        // update heap pointers and set the new size accordingly
+        prev->heap_next = next->heap_next;
+        next->heap_next->heap_prev = prev;
+        new_size += prev->size + next->size + _size_meta_data();
+
+    } else if (prev->is_free) {
+        // Option 2: Only previous block
+
+        // remove previous block from the free list
+        removeFromFreeList(prev);
+
+        // update heap pointers and set the new size accordingly
+        prev->heap_next = block->heap_next;
+        block->heap_next->heap_prev = prev;
+        prev->size += prev->size;
+
+    } else if (next->is_free) {
+        // Option 3: Only the next block
+        new_block = block;
+
+        // remove previous and next blocks from the free list
+        removeFromFreeList(next);
+
+        // update heap pointers and set the new size accordingly
+        block->heap_next = next->heap_next;
+        next->heap_next->heap_prev = block;
+        new_size += next->size;
+    }
+
+    new_block->size = new_size; // update new_block's size
+    addToFreeList(new_block);   // insert new block into the free list
+                                // (+ update global variables)
 }
 
 void* reallocate(void* oldp, size_t old_size, size_t new_size) {
@@ -132,6 +183,9 @@ void* reallocate(void* oldp, size_t old_size, size_t new_size) {
     return newp;
 }
 
+/***
+ * @param size - the desired final size of the wilderness
+ */
 void* enlargeWilderness(size_t size) {
     size_t missing_size = size - wilderness->size;
     void* res = sbrk(missing_size);
@@ -139,8 +193,6 @@ void* enlargeWilderness(size_t size) {
 
     // update global var
     allocated_bytes += missing_size;
-    free_bytes -= wilderness->size;
-    free_blocks--;
 
     // update wilderness size
     wilderness->size += missing_size;
@@ -181,11 +233,7 @@ void* smalloc(size_t size) {
         // mark block as alloced
         to_alloc->is_free = false;
 
-        // update free_blocks, free_bytes
-        free_blocks--;
-        free_bytes -= to_alloc->size;
-
-        // remove from list
+        // remove from list (+ update global variables)
         removeFromFreeList(to_alloc);
 
         // return the address after the metadata
@@ -202,6 +250,7 @@ void* smalloc(size_t size) {
         wilderness->is_free = false;
 
         // remove wilderness from free list
+        // (+ update global variables)
         removeFromFreeList(wilderness);
 
         return res; // (pointer already includes metadata offset)
@@ -233,7 +282,6 @@ void* smalloc(size_t size) {
         heap_head = new_block;
         wilderness = new_block;
     }
-
 
     // update allocated_blocks, allocated_bytes
     allocated_blocks++;
@@ -278,12 +326,8 @@ void sfree(void* p) {
     // mark as released
     meta->is_free = true;
 
-    // add to free list
+    // add to free list (+update global variables)
     addToFreeList(meta);
-
-    // update used free_blocks, free_bytes
-    free_blocks++;
-    free_bytes += meta->size;
 
     // call combine
     combineBlocks(meta);
@@ -321,9 +365,9 @@ void* srealloc(void* oldp, size_t size) {
         // nullptr is returned if something went wrong
     }
 
-    // if size > old_size then try enlarging heap before merge check
-
     // try merging (prev_heap, upper_heap, three blocks)
+
+
     // if large enough call cut block
     // update heap_list
     // update free_list (you need to remove prev or next you used)

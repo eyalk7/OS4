@@ -7,6 +7,8 @@
 #define MAX_ALLOC 100000000
 #define MMAP_THRESHOLD 131072
 
+void* smalloc(size_t size);
+void sfree(void* p);
 size_t _size_meta_data();
 
 size_t free_blocks, free_bytes, allocated_blocks, allocated_bytes;
@@ -28,8 +30,6 @@ MallocMetadata dummy_free = {0, false, false, nullptr, nullptr, nullptr, nullptr
 
 MallocMetadata* heap_head = nullptr;
 MallocMetadata* wilderness = nullptr;
-
-
 
 /*---------------HELPER FUNCTIONS---------------------------*/
 
@@ -124,6 +124,35 @@ void combineBlocks(MallocMetadata* block) {
 
 }
 
+void* reallocate(void* oldp, size_t old_size, size_t new_size) {
+    void* newp = smalloc(new_size);
+    if (newp == nullptr) return nullptr;    // smalloc failed
+
+    // copy old data to new block using memcpy
+    memcpy(newp, oldp, old_size);
+
+    // free old data using sfree (only if you succeed until now)
+    sfree(oldp);
+
+    return newp;
+}
+
+void* enlargeWilderness(size_t size) {
+    size_t missing_size = size - wilderness->size;
+    void* res = sbrk(missing_size);
+    if (res == (void*)(-1)) return nullptr; // something went wrong
+
+    // update global var
+    allocated_bytes += missing_size;
+    free_bytes -= wilderness->size;
+    free_blocks--;
+
+    // update wilderness size
+    wilderness->size += missing_size;
+
+    return (char*)wilderness + _size_meta_data();
+}
+
 /*------------ASSIGNMENT FUNCTIONS----------------------------------*/
 void* smalloc(size_t size) {
     // if FIRST ALLOC
@@ -185,21 +214,17 @@ void* smalloc(size_t size) {
 
     // if no free block was found And the wilderness chunk is free enlarge the wilderness (sbrk)
     if (wilderness && wilderness->is_free) {
-        size_t missing_size = size - wilderness->size; // both product of 8 so it's ok
-        void* res = sbrk(missing_size);
-        if (res == (void*)(-1)) return nullptr; // something went wrong
+        // enlarge the wilderness (sbrk)
+        void* res = enlargeWilderness(size);
+        if (res == nullptr) return nullptr; // something went wrong
 
-        // update global var
-        allocated_bytes += missing_size;
-
-        // update wilderness size & status
-        wilderness->size += missing_size;
+        // update wilderness status
         wilderness->is_free = false;
 
         // remove wilderness from free list
         removeFromFreeList(wilderness);
 
-        return (char*)wilderness + _size_meta_data();
+        return res; // (pointer already includes metadata offset)
     }
 
     // the previous program break will be the new block's place
