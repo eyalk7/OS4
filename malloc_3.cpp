@@ -103,8 +103,8 @@ void cutBlocks(MallocMetadata* block, size_t wanted_size) {
     addToFreeList(new_block);
 
     // update old block size, remove from free list and add again (so it will be in proper place)
-    removeFromFreeList(block);
     block->size = wanted_size;
+    removeFromFreeList(block);
     addToFreeList(block);
 
     // update global vars
