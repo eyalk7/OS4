@@ -162,6 +162,11 @@ void combineBlocks(MallocMetadata* block) {
         allocated_blocks--;
         allocated_bytes += _size_meta_data();
 
+        // update wilderness if necessary
+        if (next == wilderness) {
+            wilderness = prev;
+        }
+
     } else if (free_prev) {
         // Option 2: Only previous block
 
@@ -172,6 +177,10 @@ void combineBlocks(MallocMetadata* block) {
         prev->heap_next = next;
         if(next) next->heap_prev = prev;
         new_size += prev->size;
+
+        if (block == wilderness) {
+            wilderness = prev;
+        }
 
     } else { // if (free_next)
         // Option 3: Only the next block
@@ -184,16 +193,17 @@ void combineBlocks(MallocMetadata* block) {
         block->heap_next = next->heap_next;
         if (next->heap_next) next->heap_next->heap_prev = block;
         new_size += next->size;
+
+        // update wilderness if necessary
+        if (next == wilderness) {
+            wilderness = block;
+        }
     }
 
     new_block->size = new_size; // update new_block's size
     addToFreeList(new_block);   // insert new block into the free list
                                 // (+ update global variables)
 
-    // update wilderness if necessary
-    if (block == wilderness || next == wilderness) {
-        wilderness = new_block;
-    }
 }
 
 void* reallocate(void* oldp, size_t old_size, size_t new_size) {
@@ -268,6 +278,11 @@ MallocMetadata* tryMergingNeighbor(MallocMetadata* block, size_t wanted_size) {
         allocated_blocks--;
         allocated_bytes += _size_meta_data();
 
+        // update wilderness if necessary
+        if (block == wilderness) {
+            wilderness = prev;
+        }
+
         return prev;    // return for allocation (not added to free list)
     }
 
@@ -288,6 +303,11 @@ MallocMetadata* tryMergingNeighbor(MallocMetadata* block, size_t wanted_size) {
 
         allocated_blocks--;
         allocated_bytes += _size_meta_data();
+
+        // update wilderness if necessary
+        if (next == wilderness) {
+            wilderness = block;
+        }
 
         return block;
     }
@@ -315,6 +335,11 @@ MallocMetadata* tryMergingNeighbor(MallocMetadata* block, size_t wanted_size) {
 
         allocated_blocks -= 2;
         allocated_bytes += 2*_size_meta_data();
+
+        // update wilderness if necessary
+        if (next == wilderness) {
+            wilderness = prev;
+        }
 
         return prev;    // return for allocation (not added to free list)
     }
@@ -374,16 +399,14 @@ void* smalloc(size_t size) {
 
     // if no free block was found And the wilderness chunk is free
     if (wilderness && wilderness->is_free) {
-        // enlarge the wilderness (sbrk)
-        void* res = enlargeWilderness(size);
-        if (res == nullptr) return nullptr; // something went wrong
-
-        // update wilderness status
-        wilderness->is_free = false;
-
         // remove wilderness from free list
         // (+ update global variables)
         removeFromFreeList(wilderness);
+        wilderness->is_free = false;
+
+        // enlarge the wilderness (sbrk)
+        void* res = enlargeWilderness(size);
+        if (res == nullptr) return nullptr; // something went wrong
 
         return res; // (pointer already includes metadata offset)
     }
