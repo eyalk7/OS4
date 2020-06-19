@@ -217,7 +217,7 @@ void* enlargeWilderness(size_t size) {
  * @param block - an allocated block to merge with adjacent free blocks
  *                (used for realloc)
  */
-MallocMetadata* tryMergeWithNeighbor(MallocMetadata* block, size_t wanted_size) {
+MallocMetadata* tryMergingNeighbor(MallocMetadata* block, size_t wanted_size) {
     auto prev = block->heap_prev;
     auto next = block->heap_next;
 
@@ -468,7 +468,7 @@ void* srealloc(void* oldp, size_t size) {
     // if not mmap()=ed and size is smaller
     if (size <= old_size) {
         cutAllocatedBlock(block, size); // try to cut block
-        return oldp; // reuse the same block
+        return oldp;                    // reuse the same block
     }
 
     // Othewise, need to try and enlarge the block
@@ -482,12 +482,10 @@ void* srealloc(void* oldp, size_t size) {
         // nullptr is returned if something went wrong
     }
 
-    // try merging (prev_heap, upper_heap, three blocks)
-
     // try merging with a neighboring free block
     // after merge the neighbor blocks are not in the free list
     // and the old data was copied to the beginning of the block
-    MallocMetadata *merged_block = tryMergeWithNeighbor(block, size);
+    MallocMetadata *merged_block = tryMergingNeighbor(block, size);
     if (!merged_block) {
         // if merging was not an option
         // Final option: find new block in heap using smalloc
