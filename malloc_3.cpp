@@ -34,7 +34,7 @@ MallocMetadata* wilderness = nullptr;
 /*---------------HELPER FUNCTIONS---------------------------*/
 
 bool LARGE_ENOUGH(MallocMetadata* block, size_t size) {
-    return ( (block->size - _size_meta_data() - size) >= 128);
+    return ( (int)(block->size - _size_meta_data() - size) >= 128);
 }
 
 /**
@@ -42,6 +42,10 @@ bool LARGE_ENOUGH(MallocMetadata* block, size_t size) {
  */
 void addToFreeList(MallocMetadata* block) {
     assert(block);
+
+    // update used free_blocks, free_bytes
+    free_blocks++;
+    free_bytes += block->size;
 
     // traverse from dummy
     MallocMetadata* iter = &dummy_free;
@@ -65,10 +69,6 @@ void addToFreeList(MallocMetadata* block) {
     block->next_free = nullptr;
     block->prev_free = iter;
     iter->next_free = block;
-
-    // update used free_blocks, free_bytes
-    free_blocks++;
-    free_bytes += block->size;
 }
 
 /**
@@ -102,7 +102,7 @@ void cutBlocks(MallocMetadata* block, size_t wanted_size) {
     // add the new block to free list
     addToFreeList(new_block);
 
-    // update old block size, remove from free list and add again (so it will be in proper place)
+    // update old block size
     removeFromFreeList(block);
     block->size = wanted_size;
     addToFreeList(block);

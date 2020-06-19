@@ -39,14 +39,18 @@ size_t align(size_t size) {
 }
 
 bool LARGE_ENOUGH(MallocMetadata* block, size_t size) {
-    return ( (block->size - _size_meta_data() - size) >= 128);
+    return ( (int)(block->size - _size_meta_data() - size) >= 128);
 }
 
-/***
+/**
  * @param block - a free block to be added to the free list
  */
 void addToFreeList(MallocMetadata* block) {
     assert(block);
+
+    // update used free_blocks, free_bytes
+    free_blocks++;
+    free_bytes += block->size;
 
     // traverse from dummy
     MallocMetadata* iter = &dummy_free;
@@ -70,13 +74,9 @@ void addToFreeList(MallocMetadata* block) {
     block->next_free = nullptr;
     block->prev_free = iter;
     iter->next_free = block;
-
-    // update used free_blocks, free_bytes
-    free_blocks++;
-    free_bytes += block->size;
 }
 
-/***
+/**
  * @param block - an allocated block to be removed from the free list
  */
 void removeFromFreeList(MallocMetadata* block) {
@@ -94,7 +94,7 @@ void removeFromFreeList(MallocMetadata* block) {
     free_bytes -= block->size;
 }
 
-/***
+/**
  * @param block - a free block that is LARGE ENOUGH to be cut
  */
 void cutBlocks(MallocMetadata* block, size_t wanted_size) {
@@ -107,7 +107,7 @@ void cutBlocks(MallocMetadata* block, size_t wanted_size) {
     // add the new block to free list
     addToFreeList(new_block);
 
-    // update old block size, remove from free list and add again (so it will be in proper place)
+    // update old block size
     removeFromFreeList(block);
     block->size = wanted_size;
     addToFreeList(block);
@@ -123,7 +123,7 @@ void cutBlocks(MallocMetadata* block, size_t wanted_size) {
     block->heap_next = new_block;
 }
 
-/***
+/**
  * @param block - a free block to merge with adjacent free blocks
  */
 void combineBlocks(MallocMetadata* block) {
@@ -206,7 +206,7 @@ void* reallocate(void* oldp, size_t old_size, size_t new_size) {
     return newp;
 }
 
-/***
+/**
  * @param size - the desired final size of the wilderness
  */
 void* enlargeWilderness(size_t size) {
@@ -223,7 +223,7 @@ void* enlargeWilderness(size_t size) {
     return (char*)wilderness + _size_meta_data();
 }
 
-/***
+/**
  * @param block - an allocated block to merge with adjacent free blocks
  *                (used for realloc)
  */
