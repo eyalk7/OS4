@@ -150,6 +150,9 @@ void combineBlocks(MallocMetadata* block) {
         next->heap_next->heap_prev = prev;
         new_size += prev->size + next->size + _size_meta_data();
 
+        allocated_blocks--;
+        allocated_bytes += _size_meta_data();
+
     } else if (free_prev) {
         // Option 2: Only previous block
 
@@ -172,9 +175,6 @@ void combineBlocks(MallocMetadata* block) {
         block->heap_next = next->heap_next;
         next->heap_next->heap_prev = block;
         new_size += next->size;
-
-        allocated_blocks--;
-        allocated_bytes += _size_meta_data();
     }
 
     new_block->size = new_size; // update new_block's size
@@ -249,7 +249,6 @@ MallocMetadata* tryMergeWithNeighbor(MallocMetadata* block, size_t wanted_size) 
         // update global variables
         allocated_blocks--;
         allocated_bytes += _size_meta_data();
-
 
         return prev;    // return for allocation (not added to free list)
     }
