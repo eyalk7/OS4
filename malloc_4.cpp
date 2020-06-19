@@ -11,7 +11,7 @@ void* smalloc(size_t size);
 void sfree(void* p);
 size_t _size_meta_data();
 
-size_t free_blocks, free_bytes, allocated_blocks, allocated_bytes;
+size_t free_blocks = 0, free_bytes = 0, allocated_blocks = 0, allocated_bytes = 0;
 
 struct MallocMetadata {
     size_t size;
@@ -108,8 +108,8 @@ void cutBlocks(MallocMetadata* block, size_t wanted_size) {
     addToFreeList(new_block);
 
     // update old block size, remove from free list and add again (so it will be in proper place)
-    block->size = wanted_size;
     removeFromFreeList(block);
+    block->size = wanted_size;
     addToFreeList(block);
 
     // update global vars

@@ -11,7 +11,7 @@ void* smalloc(size_t size);
 void sfree(void* p);
 size_t _size_meta_data();
 
-size_t free_blocks, free_bytes, allocated_blocks, allocated_bytes;
+size_t free_blocks = 0, free_bytes = 0, allocated_blocks = 0, allocated_bytes = 0;
 
 struct MallocMetadata {
     size_t size;
@@ -37,7 +37,7 @@ bool LARGE_ENOUGH(MallocMetadata* block, size_t size) {
     return ( (block->size - _size_meta_data() - size) >= 128);
 }
 
-/***
+/**
  * @param block - a free block to be added to the free list
  */
 void addToFreeList(MallocMetadata* block) {
@@ -71,7 +71,7 @@ void addToFreeList(MallocMetadata* block) {
     free_bytes += block->size;
 }
 
-/***
+/**
  * @param block - an allocated block to be removed from the free list
  */
 void removeFromFreeList(MallocMetadata* block) {
@@ -89,7 +89,7 @@ void removeFromFreeList(MallocMetadata* block) {
     free_bytes -= block->size;
 }
 
-/***
+/**
  * @param block - a free block that is LARGE ENOUGH to be cut
  */
 void cutBlocks(MallocMetadata* block, size_t wanted_size) {
@@ -103,8 +103,8 @@ void cutBlocks(MallocMetadata* block, size_t wanted_size) {
     addToFreeList(new_block);
 
     // update old block size, remove from free list and add again (so it will be in proper place)
-    block->size = wanted_size;
     removeFromFreeList(block);
+    block->size = wanted_size;
     addToFreeList(block);
 
     // update global vars
@@ -118,7 +118,7 @@ void cutBlocks(MallocMetadata* block, size_t wanted_size) {
     block->heap_next = new_block;
 }
 
-/***
+/**
  * @param block - a free block to merge with adjacent free blocks
  */
 void combineBlocks(MallocMetadata* block) {
@@ -196,7 +196,7 @@ void* reallocate(void* oldp, size_t old_size, size_t new_size) {
     return newp;
 }
 
-/***
+/**
  * @param size - the desired final size of the wilderness
  */
 void* enlargeWilderness(size_t size) {
@@ -213,7 +213,7 @@ void* enlargeWilderness(size_t size) {
     return (char*)wilderness + _size_meta_data();
 }
 
-/***
+/**
  * @param block - an allocated block to merge with adjacent free blocks
  *                (used for realloc)
  */

@@ -8,7 +8,7 @@
 
 size_t _size_meta_data();
 
-size_t free_blocks, free_bytes, allocated_blocks, allocated_bytes;
+size_t free_blocks = 0, free_bytes = 0, allocated_blocks = 0, allocated_bytes = 0;
 
 struct MallocMetadata {
     size_t size;
@@ -21,8 +21,8 @@ struct MallocMetadata {
 MallocMetadata dummy_free = {0, false, nullptr, nullptr};
 
 
-/*---------------HELPER FUNCTIONS---------------------------/
-/***
+/*---------------HELPER FUNCTIONS---------------------------*/
+ /**
  * @param block - a free block to be added to the free list
  */
 void addToFreeList(MallocMetadata* block) {
@@ -50,7 +50,7 @@ void addToFreeList(MallocMetadata* block) {
     iter->next = block;
 }
 
-/***
+/**
  * @param block - an allocated block to be removed from the free list
  */
 void removeFromFreeList(MallocMetadata* block) {
