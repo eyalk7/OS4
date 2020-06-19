@@ -51,12 +51,12 @@ void addToFreeList(MallocMetadata* block) {
     // traverse from dummy
     MallocMetadata* iter = &dummy_free;
     while (iter->next_free) {
-        if (iter->next > block) { // find proper place
+        if (iter->next_free > block) { // find proper place
             // add
-            block->prev = iter;
-            block->next = iter->next;
-            iter->next->prev = block;
-            iter->next = block;
+            block->prev_free = iter;
+            block->next_free = iter->next_free;
+            iter->next_free->prev_free = block;
+            iter->next_free = block;
 
             return;
         }
@@ -130,8 +130,13 @@ void combineBlocks(MallocMetadata* block) {
     auto prev = block->heap_prev;
     auto next = block->heap_next;
 
-    bool free_prev = prev->is_free;
-    bool free_next = next->is_free;
+    if (!prev && !next) return;  // no combinations to do
+
+    bool free_prev = false;
+    if (prev) free_prev = prev->is_free;
+
+    bool free_next = false;
+    if (next) free_next = next->is_free;
 
     if (!free_prev && !free_next) return; // no combinations to do
 
@@ -226,8 +231,13 @@ MallocMetadata* tryMergingNeighbor(MallocMetadata* block, size_t wanted_size) {
     auto prev = block->heap_prev;
     auto next = block->heap_next;
 
-    bool free_prev = prev->is_free;
-    bool free_next = next->is_free;
+    if (!prev && !next) return nullptr;  // no combinations to do
+
+    bool free_prev = false;
+    if (prev) free_prev = prev->is_free;
+
+    bool free_next = false;
+    if (next) free_next = next->is_free;
 
     if (!free_prev && !free_next) return nullptr; // merging is not an option
 
@@ -498,7 +508,7 @@ void* srealloc(void* oldp, size_t size) {
     // From here onwards size > old_Size
 
     // If wilderness block was given
-    if (block == wilderness && block->heap_next == nullptr) {
+    if (block == wilderness) {
         // enlarge wilderness block and update global vars
         return enlargeWilderness(size);
         // (pointer already includes metadata offset)
