@@ -121,6 +121,10 @@ void cutBlocks(MallocMetadata* block, size_t wanted_size) {
     new_block->heap_next = block->heap_next;
     new_block->heap_prev = block;
     block->heap_next = new_block;
+
+    // update wilderness if necessary
+    if (block == wilderness)
+        wilderness = new_block;
 }
 
 /**
@@ -157,7 +161,7 @@ void combineBlocks(MallocMetadata* block) {
 
         // update heap pointers and set the new size accordingly
         prev->heap_next = next->heap_next;
-        next->heap_next->heap_prev = prev;
+        if (next->heap_next) next->heap_next->heap_prev = prev;
         new_size += prev->size + next->size + _size_meta_data();
 
         allocated_blocks--;
@@ -171,7 +175,7 @@ void combineBlocks(MallocMetadata* block) {
 
         // update heap pointers and set the new size accordingly
         prev->heap_next = block->heap_next;
-        block->heap_next->heap_prev = prev;
+        if(next) next->heap_prev = prev;
         prev->size += prev->size;
 
     } else { // if (free_next)
@@ -183,7 +187,7 @@ void combineBlocks(MallocMetadata* block) {
 
         // update heap pointers and set the new size accordingly
         block->heap_next = next->heap_next;
-        next->heap_next->heap_prev = block;
+        if (next->heap_next) next->heap_next->heap_prev = block;
         new_size += next->size;
     }
 
@@ -191,6 +195,10 @@ void combineBlocks(MallocMetadata* block) {
     addToFreeList(new_block);   // insert new block into the free list
                                 // (+ update global variables)
 
+    // update wilderness if necessary
+    if (block == wilderness || next == wilderness) {
+        wilderness = new_block;
+    }
 }
 
 void* reallocate(void* oldp, size_t old_size, size_t new_size) {
@@ -259,7 +267,7 @@ MallocMetadata* tryMergingNeighbor(MallocMetadata* block, size_t wanted_size) {
 
         // update heap pointers
         prev->heap_next = block->heap_next;
-        block->heap_next->heap_prev = prev;
+        if (next) next->heap_prev = prev;
 
         // update global variables
         allocated_blocks--;
@@ -281,7 +289,7 @@ MallocMetadata* tryMergingNeighbor(MallocMetadata* block, size_t wanted_size) {
 
         // update heap pointers
         block->heap_next = next->heap_next;
-        next->heap_next->heap_prev = block;
+        if (next->heap_next) next->heap_next->heap_prev = block;
 
         allocated_blocks--;
         allocated_bytes += _size_meta_data();
@@ -308,7 +316,7 @@ MallocMetadata* tryMergingNeighbor(MallocMetadata* block, size_t wanted_size) {
 
         // update heap pointers
         prev->heap_next = next->heap_next;
-        next->heap_next->heap_prev = prev;
+        if (next->heap_next) next->heap_next->heap_prev = prev;
 
         allocated_blocks -= 2;
         allocated_bytes += 2*_size_meta_data();
