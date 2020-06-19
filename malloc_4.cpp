@@ -51,12 +51,12 @@ void addToFreeList(MallocMetadata* block) {
     // traverse from dummy
     MallocMetadata* iter = &dummy_free;
     while (iter->next_free) {
-        if (iter->next_free->size > block->size) { // find proper place
+        if (iter->next > block) { // find proper place
             // add
-            block->prev_free = iter;
-            block->next_free = iter->next_free;
-            iter->next_free->prev_free = block;
-            iter->next_free = block;
+            block->prev = iter;
+            block->next = iter->next;
+            iter->next->prev = block;
+            iter->next = block;
 
             return;
         }
