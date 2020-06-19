@@ -176,7 +176,7 @@ void combineBlocks(MallocMetadata* block) {
         // update heap pointers and set the new size accordingly
         prev->heap_next = block->heap_next;
         if(next) next->heap_prev = prev;
-        prev->size += prev->size;
+        new_size += prev->size;
 
     } else { // if (free_next)
         // Option 3: Only the next block
