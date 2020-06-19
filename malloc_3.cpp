@@ -47,6 +47,8 @@ void addToFreeList(MallocMetadata* block) {
     free_blocks++;
     free_bytes += block->size;
 
+    block->is_free = true;
+
     // traverse from dummy
     MallocMetadata* iter = &dummy_free;
     while (iter->next_free) {
@@ -62,8 +64,6 @@ void addToFreeList(MallocMetadata* block) {
 
         iter = iter->next_free;
     }
-
-    block->is_free = true;
 
     // add at end of list
     block->next_free = nullptr;
@@ -169,7 +169,7 @@ void combineBlocks(MallocMetadata* block) {
         removeFromFreeList(prev);
 
         // update heap pointers and set the new size accordingly
-        prev->heap_next = block->heap_next;
+        prev->heap_next = next;
         if(next) next->heap_prev = prev;
         prev->size += prev->size;
 
@@ -261,7 +261,7 @@ MallocMetadata* tryMergingNeighbor(MallocMetadata* block, size_t wanted_size) {
         prev->size += _size_meta_data() + block->size;
 
         // update heap pointers
-        prev->heap_next = block->heap_next;
+        prev->heap_next = next;
         if (next) next->heap_prev = prev;
 
         // update global variables

@@ -52,6 +52,8 @@ void addToFreeList(MallocMetadata* block) {
     free_blocks++;
     free_bytes += block->size;
 
+    block->is_free = true;
+
     // traverse from dummy
     MallocMetadata* iter = &dummy_free;
     while (iter->next_free) {
@@ -67,8 +69,6 @@ void addToFreeList(MallocMetadata* block) {
 
         iter = iter->next_free;
     }
-
-    block->is_free = true;
 
     // add at end of list
     block->next_free = nullptr;
