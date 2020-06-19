@@ -1,47 +1,28 @@
 #include <iostream>
 #include <assert.h>
+#include <unistd.h>
 #include "tests_header.h"
 using namespace std;
 
 int N = 10;
 
 int main() {
-    int* arr = (int*)smalloc(sizeof(int) * N);
-    assert(arr);
+    cout << _size_meta_data() << endl;
+    cout << sbrk(0) << endl;
+    int* arr = (int*)smalloc(16);
+    int* arr2 = (int*)smalloc(16);
 
-    for (int i=0; i<N; i++) arr[i] = i;
-    for (int i=0; i<N; i++) assert(arr[i] == i);
+    arr[0] = 1;
+    arr[1] = 3;
+    arr[2] = 5;
+    arr[3] = 7;
+    arr2[0] = 2;
+    arr2[1] = 4;
+    arr2[2] = 6;
+    arr2[3] = 8;
 
-    assert(_num_allocated_blocks() == 1);
-    assert(_num_allocated_bytes() == N*sizeof(int));
-    assert(_num_free_blocks() == 0);
-    assert(_num_free_bytes() == 0);
-
-    sfree(arr);
-
-    assert(_num_free_blocks() == 1);
-    assert(_num_free_bytes() == N*sizeof(int));
-    assert(_num_allocated_blocks() == 1);
-    assert(_num_allocated_bytes() == N*sizeof(int));
-
-    arr = (int*) scalloc(2*N, sizeof(int));
-    assert(arr);
-
-    for (int i=0; i<2*N; i++) assert(arr[i] == 0);
-
-    assert(_num_allocated_blocks() == 1);
-    assert(_num_allocated_bytes() == 2*N*sizeof(int));
-    assert(_num_free_blocks() == 0);
-    assert(_num_free_bytes() == 0);
-
-    sfree(arr);
-
-    assert(_num_allocated_blocks() == 1);
-    assert(_num_allocated_bytes() == 2*N*sizeof(int));
-    assert(_num_free_blocks() == 1);
-    assert(_num_free_bytes() == 2*N*sizeof(int));
-
-    cout << "FINISHED ALRIGHT" << endl;
+    cout << arr << endl;
+    cout << arr2 << endl;
 
     return 0;
 }
