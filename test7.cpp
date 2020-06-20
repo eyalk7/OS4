@@ -234,7 +234,7 @@ void malloc3_test_02() {
     sfree(first_sbrk);
     assert(_num_free_blocks() == 2);
     assert(_num_free_bytes() == 200);
-    first_sbrk= (char*) srealloc(second_sbrk,290);
+    first_sbrk= (char*) srealloc(second_sbrk,300);
     assert(first_sbrk);
     assert(_num_allocated_blocks() == 2);
     assert(_num_free_blocks() == 0);

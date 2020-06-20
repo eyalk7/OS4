@@ -34,7 +34,7 @@ MallocMetadata* wilderness = nullptr;
 /*---------------HELPER FUNCTIONS---------------------------*/
 
 bool LARGE_ENOUGH(MallocMetadata* block, size_t size) {
-    return ( (int)(block->size - _size_meta_data() - size) >= 128);
+    return (block->size >= _size_meta_data() + size + 128);
 }
 
 /**
@@ -518,6 +518,8 @@ void* srealloc(void* oldp, size_t size) {
 
     // Othewise, need to try and enlarge the block
     // From here onwards size > old_Size
+
+    // todo: wilderness check first ? or try merge first ? (piazza question)
 
     // If wilderness block was given
     if (block == wilderness) {
