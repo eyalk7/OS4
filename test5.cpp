@@ -3,8 +3,10 @@
 //
 
 #include <iostream>
+using std::cout;
+using std::endl;
 #include <assert.h>
-#include "malloc_3.h"
+#include "tests_header.h"
 
 struct TestData
 {
@@ -41,7 +43,7 @@ int main() {
     data.allocBlocks = 0;
     data.allocBytes = 0;
 
-    size_t mSz = _size_meta_data();
+    //size_t mSz = _size_meta_data();
 
     //basic smalloc
     //allocate 0
@@ -206,6 +208,7 @@ int main() {
     //challenge 4
     //allocate 300000
     p = smalloc(300000);
+    //if (!p) cout << "hello" << endl;
     data.allocBlocks+=1;
     data.allocBytes += 300000;
     assertAll(data);
@@ -250,6 +253,10 @@ int main() {
     data.freeBytes += 200;
     assertAll(data);
 
+    void* temp = smalloc(100);
+    data.freeBlocks -= 1;
+    data.freeBytes -= 100;
+
     //realloc middle to 150
     p3 = srealloc(p2,150);
     data.freeBlocks-= 1;
@@ -259,6 +266,10 @@ int main() {
     assertAll(data);
     //make sure we merged with the next block (which means our start remains the same)
     assert(p3 == p2);
+
+    sfree(temp);
+    data.freeBlocks += 1;
+    data.freeBytes += 100;
 
     //realloc to 180
     p2 = srealloc(p2,180);
@@ -388,7 +399,6 @@ int main() {
     data.allocBytes += 200000;
     assert(((char*)p)[100000] == 42);
     assertAll(data);
-
 
     return 0;
 }

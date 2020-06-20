@@ -207,7 +207,7 @@ void combineBlocks(MallocMetadata* block) {
 
     new_block->size = new_size; // update new_block's size
     addToFreeList(new_block);   // insert new block into the free list
-    // (+ update global variables)
+                                // (+ update global variables)
 }
 
 void* reallocate(void* oldp, size_t old_size, size_t new_size) {
@@ -215,7 +215,8 @@ void* reallocate(void* oldp, size_t old_size, size_t new_size) {
     if (newp == nullptr) return nullptr;    // smalloc failed
 
     // copy old data to new block using memcpy
-    memcpy(newp, oldp, old_size);
+    size_t min_size = old_size < new_size ? old_size : new_size;
+    memcpy(newp, oldp, min_size);
 
     // free old data using sfree (only if you succeed until now)
     sfree(oldp);
@@ -258,10 +259,11 @@ MallocMetadata* tryMergingNeighbor(MallocMetadata* block, size_t wanted_size) {
 
     if (!free_prev && !free_next) return nullptr; // merging is not an option
 
-    size_t required_size = wanted_size - block->size - _size_meta_data();
+    size_t block_size = block->size + _size_meta_data();
 
     // Try merging with previous neighbour
-    if (free_prev && prev->size <= required_size) {
+    if (free_prev && prev->size + block_size >= wanted_size) {
+
         // remove the free neighbor from free list
         removeFromFreeList(prev);
         prev->is_free = false;
@@ -291,7 +293,7 @@ MallocMetadata* tryMergingNeighbor(MallocMetadata* block, size_t wanted_size) {
     }
 
     // Try merging with next neighbour
-    if (free_next && next->size <= required_size) {
+    if (free_next && next->size + block_size >= wanted_size) {
         // remove the free neighbor from free list
         removeFromFreeList(next);
         next->is_free = false;
@@ -316,10 +318,10 @@ MallocMetadata* tryMergingNeighbor(MallocMetadata* block, size_t wanted_size) {
         return block;
     }
 
-    required_size -= _size_meta_data();
+    block_size += _size_meta_data();
 
     // Try merging with both neighbours
-    if (free_prev && free_next && prev->size + next->size <= required_size) {
+    if (free_prev && free_next && prev->size + next->size + block_size >= wanted_size) {
         // remove the free neighbor from free list
         removeFromFreeList(prev);
         removeFromFreeList(next);
@@ -383,9 +385,12 @@ void* smalloc(size_t size) {
 
     // if size >= 128*1024 use mmap (+_size_meta_data())
     if (size >= MMAP_THRESHOLD) {
-        MallocMetadata* alloc = (MallocMetadata*) mmap(NULL, _size_meta_data() + size, PROT_READ | PROT_WRITE, MAP_ANONYMOUS, -1, 0);
+        MallocMetadata* alloc = (MallocMetadata*) mmap(NULL, _size_meta_data() + size, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+        if(alloc == MAP_FAILED) return nullptr; // something went wrong
+
         alloc->size = size;
         alloc->is_mmap = true;
+        alloc->is_free = false;
 
         // update allocated vars
         allocated_blocks++;
