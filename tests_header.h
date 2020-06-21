@@ -4,6 +4,11 @@
 #include <unistd.h>
 #include <iostream>
 #include <string.h>
+#include <iostream>
+#include <assert.h>
+#include <unistd.h>
+#include "tests_header.h"
+using namespace std;
 
 void* smalloc(size_t size);
 void* scalloc(size_t num, size_t size);

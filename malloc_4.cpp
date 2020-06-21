@@ -542,8 +542,6 @@ void* srealloc(void* oldp, size_t size) {
     // Othewise, need to try and enlarge the block
     // From here onwards size > old_Size
 
-    // todo: wilderness check first ? or try merge first ? (piazza question)
-
     // If wilderness block was given
     if (block == wilderness) {
         // enlarge wilderness block and update global vars
