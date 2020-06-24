@@ -214,9 +214,9 @@ void* reallocate(void* oldp, size_t old_size, size_t new_size) {
     void* newp = smalloc(new_size);
     if (newp == nullptr) return nullptr;    // smalloc failed
 
-    // copy old data to new block using memcpy
+    // copy old data to new block using memmove
     size_t min_size = old_size < new_size ? old_size : new_size;
-    memcpy(newp, oldp, min_size);
+    memmove(newp, oldp, min_size);
 
     // free old data using sfree (only if you succeed until now)
     sfree(oldp);
@@ -271,7 +271,7 @@ MallocMetadata* tryMergingNeighbor(MallocMetadata* block, size_t wanted_size) {
         // copy the data to the start of the new block
         void* copy_from = (char*)block + _size_meta_data();
         void* copy_to = (char*)prev + _size_meta_data();
-        memcpy(copy_to, copy_from, block->size);
+        memmove(copy_to, copy_from, block->size);
 
         // update new block's size
         prev->size += _size_meta_data() + block->size;
@@ -330,7 +330,7 @@ MallocMetadata* tryMergingNeighbor(MallocMetadata* block, size_t wanted_size) {
         // copy the data to the start of the new block
         void* copy_from = (char*)block + _size_meta_data();
         void* copy_to = (char*)prev + _size_meta_data();
-        memcpy(copy_to, copy_from, block->size);
+        memmove(copy_to, copy_from, block->size);
 
         // update new block's size
         prev->size += 2*_size_meta_data() + block->size + next->size;

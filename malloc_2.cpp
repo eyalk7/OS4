@@ -156,8 +156,8 @@ void* srealloc(void* oldp, size_t size) {
     void* newp = smalloc(size);
     if (newp == nullptr) return nullptr;    // smalloc failed
 
-    // copy old data to new block using memcpy
-    memcpy(newp, oldp, old_size);
+    // copy old data to new block using memmove
+    memmove(newp, oldp, old_size);
 
     // free old data using sfree (only if you succeed until now)
     sfree(oldp);
